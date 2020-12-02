@@ -40,8 +40,19 @@ class GraphTripleConv(tf.keras.Model):
         o_idx = edges[:, 1]
 
         # (T, D)
-        cur_s_vecs = obj_vecs[s_idx]
-        cur_o_vecs = obj_vecs[o_idx]
+        # cur_s_vecs = obj_vecs[s_idx.numpy()]
+        # cur_o_vecs = obj_vecs[o_idx.numpy()]
+        cur_s_vecs = []
+        cur_o_vecs = []
+
+        for idx in s_idx.numpy():
+            cur_s_vecs.append(obj_vecs[idx])
+        
+        for idx in o_idx.numpy():
+            cur_o_vecs.append(obj_vecs[idx])
+        
+        cur_s_vecs = tf.convert_to_tensor(cur_s_vecs)
+        cur_o_vecs = tf.convert_to_tensor(cur_o_vecs)
 
         # (T, 3 * D)
         cur_t_vecs = tf.concat([cur_s_vecs, pred_vecs, cur_o_vecs], axis=1)
@@ -85,7 +96,7 @@ class GraphTripleConvNet(tf.keras.Model):
         super(GraphTripleConvNet, self).__init__()
 
         self.num_layers = num_layers
-        self.gconvs = tf.keras.Sequential()
+        self.gconvs = []
         gconv_kwargs = {
             'input_dim': input_dim,
             'hidden_dim': hidden_dim,
@@ -94,9 +105,9 @@ class GraphTripleConvNet(tf.keras.Model):
         }
 
         for _ in range(self.num_layers):
-            self.gconvs.add(GraphTripleConv(**gconv_kwargs))
+            self.gconvs.append(GraphTripleConv(**gconv_kwargs))
 
-    def forward(self, obj_vecs, pred_vecs, edges):
+    def call(self, obj_vecs, pred_vecs, edges):
         for i in range(self.num_layers):
             gconv = self.gconvs[i]
             obj_vecs, pred_vecs = gconv(obj_vecs, pred_vecs, edges)

@@ -120,8 +120,22 @@ ckpt_manager = tf.train.CheckpointManager(
 
 
 # define sample function
-def sample(step):
-    pass
+def sample(epoch):
+    test_json = './test/test.json'
+    scene_graphs = json.load(open(test_json))
+
+    print(len(scene_graphs))
+    
+    objs, triples = model.encode_scene_graphs(scene_graphs)
+
+    objs = tf.convert_to_tensor(objs)
+    triples = tf.convert_to_tensor(triples)
+
+    print(objs)
+
+    bbox_pred = model(objs, triples)
+
+    # TODO: draw bbox
 
 # define training step
 def train_step(layouts_json, is_training=True):
@@ -252,7 +266,7 @@ def train_step(layouts_json, is_training=True):
         loss = box_loss(bbox_pred, all_boxes)
 
     if is_training:
-        gradients = tape.gradient(model.trainable_variables)
+        gradients = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(
             zip(gradients, model.trainable_variables)
         )
@@ -265,7 +279,11 @@ def train():
     # TODO: add code of restoring
     epoch = 0
     iter_cnt = 0
-    iter_every_epoch = int(len(dataset) / batch_size)
+    iter_every_epoch = len(dataset)
+
+    sample(0)
+
+    exit(0)
 
     for file_batch in dataset:
         loss = train_step(file_batch)
@@ -276,9 +294,10 @@ def train():
         #     print('switching to eval mode')
         #     # TODO: switch to eval mode
 
-        if iter_cnt % print_every:
-            print('Epoch: {:.2f}, Iteration: {:6d}. Loss: {:.4f}').format(
-                iter_every_epoch / iter_cnt, iter_cnt, loss)
+        if iter_cnt % print_every == 0:
+            print(np.mean(loss))
+            print('Epoch: {:.2f}, Iteration: {:6d}. Loss: {:.4f}'.format(
+                iter_cnt / iter_every_epoch, iter_cnt, np.mean(loss)))
 
     epoch += 1
 

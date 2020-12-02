@@ -17,8 +17,10 @@ class Sg2ImModel(tf.keras.Model):
         num_objs = len(vocab['object_idx_to_name'])
         num_preds = len(vocab['pred_idx_to_name'])
 
-        self.obj_embeddings = tf.one_hot(num_objs + 1, depth=embedding_dim)
-        self.pred_embeddings = tf.one_hot(num_preds, depth=embedding_dim)
+        # self.obj_embeddings = tf.one_hot(num_objs + 1, depth=embedding_dim)
+        # self.pred_embeddings = tf.one_hot(num_preds, depth=embedding_dim)
+        self.obj_embeddings = tf.keras.layers.Embedding(num_objs + 1, embedding_dim)
+        self.pred_embeddings = tf.keras.layers.Embedding(num_preds,embedding_dim)
 
         if gconv_num_layers == 0:
             # input: embedding_dim
@@ -56,7 +58,7 @@ class Sg2ImModel(tf.keras.Model):
         # split triples, s, p and o all have size (T, 1)
         s, p, o = tf.split(triples, num_or_size_splits=3, axis=1)
         # squeeze, so the result size is (T,)
-        s, p, p = [tf.squeeze(x, axis=1) for x in [s, p ,o]]
+        s, p, o = [tf.squeeze(x, axis=1) for x in [s, p ,o]]
         
         # `edges` has shape (T, 2)
         edges = tf.stack([s, o], axis=1)
@@ -77,10 +79,33 @@ class Sg2ImModel(tf.keras.Model):
 
         return boxes_pred
 
-    def encode_scene_graphs(self, scene_graphs_json):
-        objs = None
-        triples = None
+    def encode_scene_graphs(self, scene_graphs):
+        if isinstance(scene_graphs, dict):
+            # We just got a single scene graph, so promote it to a list
+            scene_graphs = [scene_graphs]
 
+        objs, triples = [], []
+        obj_offset = 0
+        for i, sg in enumerate(scene_graphs):
+        # Insert dummy __image__ object and __in_image__ relationships
+            sg['objects'].append('__image__')
+            image_idx = len(sg['objects']) - 1
+            for j in range(image_idx):
+                sg['relationships'].append([j, '__in_image__', image_idx])
+
+            for obj in sg['objects']:
+                obj_idx = self.vocab['object_name_to_idx'].get(obj, None)
+                if obj_idx is None:
+                    raise ValueError('Object "%s" not in vocab' % obj)
+                objs.append(obj_idx)
+            for s, p, o in sg['relationships']:
+                pred_idx = self.vocab['pred_name_to_idx'].get(p, None)
+                if pred_idx is None:
+                    raise ValueError('Relationship "%s" not in vocab' % p)
+                triples.append([s + obj_offset, pred_idx, o + obj_offset])
+        
+            obj_offset += len(sg['objects'])
+        
         return objs, triples
 
     def call_json(self, scene_graphs_json):
