@@ -5,6 +5,7 @@ import json
 import random
 import math
 from models.sg2im import Sg2ImModel
+from PIL import Image, ImageDraw
 
 # ---------------- define parameters ----------------
 data_dir = './data/magazine'
@@ -30,8 +31,9 @@ activation = 'leakyrelu-0.2'
 print_every = 10
 timing = False
 checkpoint_every = 1e4
-output_dir = './output'
-checkpoint_dir = './ckpt'
+# output_dir = './output/output-20120302'
+output_dir = './test/test-result/20120401'
+checkpoint_dir = './ckpt/ckpt-20120302'
 checkpoint_max_to_keep = 20
 restore_from_checkpooint = False
 
@@ -115,27 +117,69 @@ ckpt = tf.train.Checkpoint(
     optimizer=optimizer,
     model=model
 )
+
 ckpt_manager = tf.train.CheckpointManager(
     ckpt, checkpoint_dir, max_to_keep=checkpoint_max_to_keep)
 
 
 # define sample function
 def sample(epoch):
+    colormap = ['#000000','#0000ff', '#00ff00', '#00ffff', '#ff0000', '#ff00ff', '#ffff00']
+
     test_json = './test/test.json'
     scene_graphs = json.load(open(test_json))
-
-    print(len(scene_graphs))
     
     objs, triples = model.encode_scene_graphs(scene_graphs)
 
     objs = tf.convert_to_tensor(objs)
     triples = tf.convert_to_tensor(triples)
 
-    print(objs)
+    bbox_pred = model(objs, triples).numpy()
 
-    bbox_pred = model(objs, triples)
+    idx = 0
+    group_objs = []
+    group_bbox = []
+    temp_objs = []
+    temp_bbox = []
 
-    # TODO: draw bbox
+    while idx < len(objs):
+        obj = objs[idx]
+        bbox = bbox_pred[idx]
+        temp_objs.append(obj)
+        temp_bbox.append(bbox)
+
+        if obj == 0:
+            group_objs.append(temp_objs)
+            group_bbox.append(temp_bbox)
+            temp_objs = []
+            temp_bbox = []
+
+        idx += 1
+    
+    for i, group in enumerate(group_objs):
+        canva = Image.fromarray(np.zeros((int(layout_height), int(layout_width))))
+        canva = canva.convert('RGB')
+        draw = ImageDraw.Draw(canva)
+        for j, category_idx in enumerate(group):
+            category_idx = category_idx.numpy()
+            if category_idx == 0:
+                continue
+
+            box = group_bbox[i][j]
+
+            x0, y0, x1, y1 = box
+
+            x0 = int(x0 * layout_width)
+            x1 = int(x1 * layout_width)
+
+            y0 = int(y0 * layout_height)
+            y1 = int(y1 * layout_height)
+            
+            draw.rectangle([x0, y0, x1, y1], outline=colormap[category_idx])
+        
+        canva = canva.convert('RGB')
+        canva.save(os.path.join(output_dir, '%d_%d.png' % (epoch, i)))
+
 
 # define training step
 def train_step(layouts_json, is_training=True):
@@ -281,30 +325,32 @@ def train():
     iter_cnt = 0
     iter_every_epoch = len(dataset)
 
-    sample(0)
+    while iter_cnt < num_iterations:
+        for file_batch in dataset:
+            loss = train_step(file_batch)
 
-    exit(0)
+            iter_cnt += 1
 
-    for file_batch in dataset:
-        loss = train_step(file_batch)
+            # if iter_cnt == eval_mode_after:
+            #     print('switching to eval mode')
+            #     # TODO: switch to eval mode
 
-        iter_cnt += 1
+            if iter_cnt % print_every == 0:
+                print(np.mean(loss))
+                print('Epoch: {:.2f}, Iteration: {:6d}. Loss: {:.4f}'.format(
+                    iter_cnt / iter_every_epoch, iter_cnt, np.mean(loss)))
 
-        # if iter_cnt == eval_mode_after:
-        #     print('switching to eval mode')
-        #     # TODO: switch to eval mode
+        epoch += 1
 
-        if iter_cnt % print_every == 0:
-            print(np.mean(loss))
-            print('Epoch: {:.2f}, Iteration: {:6d}. Loss: {:.4f}'.format(
-                iter_cnt / iter_every_epoch, iter_cnt, np.mean(loss)))
+        if epoch % checkpoint_every:
+            ckpt_manager.save()
+            sample(epoch)
 
-    epoch += 1
 
-    if epoch % checkpoint_every:
-        ckpt_manager.save()
-        sample(epoch)
+def test():
+    ckpt.restore('./ckpt/ckpt-20120302/ckpt-100')
+    sample(100)
 
 
 if __name__ == '__main__':
-    train()
+    test()

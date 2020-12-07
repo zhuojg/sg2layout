@@ -16,6 +16,7 @@ def build_mlp(dim_list, activation='relu', batch_norm='none', dropout=0, final_n
         if not is_final_layer or final_nonlinearity:
             if batch_norm == 'batch':
                 mlp.add(tf.keras.layers.BatchNormalization())
+            
             if activation == 'relu':
                 mlp.add(tf.keras.layers.ReLU())
             elif activation == 'leakyrelu':
