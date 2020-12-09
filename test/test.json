@@ -1,0 +1,96 @@
+[
+    {
+        "objects": ["header", "image", "text", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [1, "above", 2],
+            [0, "inside", 3],
+            [1, "inside", 3],
+            [2, "inside", 3]
+        ]
+    },
+    {
+        "objects": ["header", "image", "text", "image", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [1, "above", 2],
+            [3, "above", 0],
+            [0, "inside", 4],
+            [1, "inside", 4],
+            [2, "inside", 4],
+            [3, "inside", 4]
+        ]
+    },
+    {
+        "objects": ["header", "image", "text", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [1, "left of", 2],
+            [0, "inside", 3],
+            [1, "inside", 3],
+            [2, "inside", 3]
+        ]
+    },
+    {
+        "objects": ["header", "image", "text", "text over image", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [1, "left of", 2],
+            [3, "inside", 1],
+            [0, "inside", 4],
+            [1, "inside", 4],
+            [2, "inside", 4],
+            [3, "inside", 4]
+        ]
+    },
+    {
+        "objects": ["header", "image", "text", "header over image", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [1, "left of", 2],
+            [1, "surrounding", 3],
+            [0, "inside", 4],
+            [1, "inside", 4],
+            [2, "inside", 4],
+            [3, "inside", 4]
+        ]
+    },
+    {
+        "objects": ["header", "image", "image", "text", "text", "background"],
+        "relationships": [
+            [0, "above", 1],
+            [0, "above", 3],
+            [1, "left of", 3],
+            [1, "above", 2],
+            [3, "above", 2],
+            [1, "above", 4],
+            [3, "above", 4],
+            [2, "right of", 4],
+            [0, "inside", 5],
+            [1, "inside", 5],
+            [2, "inside", 5],
+            [3, "inside", 5],
+            [4, "inside", 5]
+        ]
+    },
+    {
+        "objects": ["header over image", "image", "image", "text", "text", "image", "background"],
+        "relationships": [
+            [0, "inside", 5],
+            [5, "above", 1],
+            [5, "above", 3],
+            [1, "left of", 3],
+            [1, "above", 2],
+            [3, "above", 2],
+            [1, "above", 4],
+            [3, "above", 4],
+            [2, "right of", 4],
+            [0, "inside", 6],
+            [1, "inside", 6],
+            [2, "inside", 6],
+            [3, "inside", 6],
+            [4, "inside", 6],
+            [5, "inside", 6]
+        ]
+    }
+]
