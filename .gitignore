@@ -143,5 +143,5 @@ cython_debug/
 # data
 data/
 ckpt/
-test/
+test/test-result
 output/

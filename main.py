@@ -10,7 +10,7 @@ import argparse
 
 
 # ---------------- sample function ----------------
-def sample(prefix, args):
+def sample(prefix):
     layout_height = 64.
     layout_width = 64.
 
@@ -69,6 +69,7 @@ def sample(prefix, args):
         
         canva = canva.convert('RGB')
         canva.save(os.path.join(args.output_dir, '%s_%d.png' % (prefix, i)))
+        print('[Sample] image %s_%d.png saved.' % (prefix, i))
 
 
 # ---------------- training one step ----------------
@@ -214,12 +215,12 @@ def train_step(layouts_json, is_training=True):
 
 
 # ---------------- training pipeline ----------------
-def train(args):
+def train():
     if not os.path.isdir(args.output_dir):
-            os.mkdir(args.output_dir)
+            os.makedirs(args.output_dir)
 
     if not os.path.isdir(args.checkpoint_dir):
-        os.mkdir(args.checkpoint_dir)
+        os.makedirs(args.checkpoint_dir)
 
     # ---------------- dataset ----------------
     dataset = tf.data.Dataset.list_files(os.path.join(args.data_dir, '*.json'))
@@ -234,7 +235,7 @@ def train(args):
     iter_cnt = 0
     iter_every_epoch = len(dataset)
 
-    while iter_cnt < args.num_iterations:
+    while iter_cnt < args.num_iter:
         for file_batch in dataset:
             loss = train_step(file_batch)
 
@@ -249,13 +250,15 @@ def train(args):
 
         if epoch % args.checkpoint_every:
             ckpt_manager.save()
-            sample('train_%s' % epoch, args)
+            sample('train_%s' % epoch)
 
 
 # ---------------- test pipeline ----------------
-def test(args):
-    # ckpt.restore('./ckpt/ckpt-20120302/ckpt-100')
-    ckpt.resotre(args.checkpoint_path)
+def test():
+    if not os.path.isdir(args.output_dir):
+        os.mkdir(args.output_dir)
+    
+    ckpt.restore(args.checkpoint_path)
     sample('test')
 
 
@@ -263,7 +266,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # basic configuration
-    parser.add_argument('--data_dir', default='')
+    parser.add_argument('--data_dir', default=None)
     parser.add_argument('--mode', default='test', choices=['test', 'train'])
 
     # model configuration
@@ -281,8 +284,8 @@ if __name__ == '__main__':
     # print and ckpt configuration
     parser.add_argument('--print_every', default=10, type=int)
     parser.add_argument('--checkpoint_every', default=1e4, type=int)
-    parser.add_argument('--output_dir', default='./test/test-result/')
-    parser.add_argument('--checkpoint_dir', default='./ckpt/')
+    parser.add_argument('--output_dir', default=None)
+    parser.add_argument('--checkpoint_dir', default=None)
     parser.add_argument('--checkpoint_max_to_keep', default=20, type=int)
     parser.add_argument('--checkpoint_path', default=None)
     parser.add_argument('--sample_json', default='./test/test.json')
@@ -373,7 +376,7 @@ if __name__ == '__main__':
     # -------------- start ---------------
     if args.mode == 'test':
         print('Start testing...')
-        test(args)
+        test()
     elif args.mode == 'train':
         print('Start training...')
-        train(args)
+        train()
