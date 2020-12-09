@@ -6,127 +6,17 @@ import random
 import math
 from models.sg2im import Sg2ImModel
 from PIL import Image, ImageDraw
-
-# ---------------- define parameters ----------------
-data_dir = './data/magazine'
-layout_width = 64.
-layout_height = 64.
-
-batch_size = 32
-num_iterations = 1e+6
-learning_rate = 1e-4
-eval_mode_after = 1e+5
-
-num_train_samples = None
-num_val_samples = 1024
-
-embedding_dim = 128
-gconv_dim = 128
-gconv_hidden_dim = 512
-gconv_num_layers = 5
-mlp_normalization = 'none'
-normalization = 'batch'
-activation = 'leakyrelu-0.2'
-
-print_every = 10
-timing = False
-checkpoint_every = 1e4
-# output_dir = './output/output-20120302'
-output_dir = './test/test-result/20120401'
-checkpoint_dir = './ckpt/ckpt-20120302'
-checkpoint_max_to_keep = 20
-restore_from_checkpooint = False
-
-if not os.path.isdir(output_dir):
-    os.mkdir(output_dir)
-
-if not os.path.isdir(checkpoint_dir):
-    os.mkdir(checkpoint_dir)
-
-# ---------- end -----------
-
-# define dataset
-dataset = tf.data.Dataset.list_files(os.path.join(data_dir, '*.json'))
-dataset = dataset.batch(batch_size=batch_size)
-
-# ---------------- define parameters ----------------
-vocab = {
-    'object_name_to_idx': {},
-    'pred_name_to_idx': {},
-}
-vocab['object_name_to_idx']['__image__'] = 0
-vocab['object_name_to_idx']['text over image'] = 1
-vocab['object_name_to_idx']['image'] = 2
-vocab['object_name_to_idx']['background'] = 3
-vocab['object_name_to_idx']['header'] = 4
-vocab['object_name_to_idx']['header over image'] = 5
-vocab['object_name_to_idx']['text'] = 6
-
-# build object_idx_to_name
-name_to_idx = vocab['object_name_to_idx']
-assert len(name_to_idx) == len(set(name_to_idx.values()))
-max_object_idx = max(name_to_idx.values())
-idx_to_name = ['NONE'] * (1 + max_object_idx)
-for name, idx in vocab['object_name_to_idx'].items():
-    idx_to_name[idx] = name
-vocab['object_idx_to_name'] = idx_to_name
-
-vocab['pred_idx_to_name'] = [
-    '__in_image__',
-    'left of',
-    'right of',
-    'above',
-    'below',
-    'inside',
-    'surrounding',
-]
-
-# build pred_name_to_idx
-vocab['pred_name_to_idx'] = {}
-for idx, name in enumerate(vocab['pred_idx_to_name']):
-    vocab['pred_name_to_idx'][name] = idx
-
-# ---------- end -----------
-
-# build models
-kwargs = {
-    'vocab': vocab,
-    'embedding_dim': embedding_dim,
-    'gconv_dim': gconv_dim,
-    'gconv_hidden_dim': gconv_hidden_dim,
-    'gconv_num_layers': gconv_num_layers,
-    'mlp_normalization': mlp_normalization,
-    'normalization': normalization,
-    'activation': activation,
-}
-model = Sg2ImModel(**kwargs)
-
-# define optimizer
-optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-
-# define loss
+import argparse
 
 
-def box_loss(bbox_pred, bbox):
-    loss_box = tf.keras.losses.MSE(bbox_pred, bbox)
-    return loss_box
+# ---------------- sample function ----------------
+def sample(prefix, args):
+    layout_height = 64.
+    layout_width = 64.
 
-
-# define checkpoint
-ckpt = tf.train.Checkpoint(
-    optimizer=optimizer,
-    model=model
-)
-
-ckpt_manager = tf.train.CheckpointManager(
-    ckpt, checkpoint_dir, max_to_keep=checkpoint_max_to_keep)
-
-
-# define sample function
-def sample(epoch):
     colormap = ['#000000','#0000ff', '#00ff00', '#00ffff', '#ff0000', '#ff00ff', '#ffff00']
 
-    test_json = './test/test.json'
+    test_json = args.sample_json
     scene_graphs = json.load(open(test_json))
     
     objs, triples = model.encode_scene_graphs(scene_graphs)
@@ -178,10 +68,10 @@ def sample(epoch):
             draw.rectangle([x0, y0, x1, y1], outline=colormap[category_idx])
         
         canva = canva.convert('RGB')
-        canva.save(os.path.join(output_dir, '%d_%d.png' % (epoch, i)))
+        canva.save(os.path.join(args.output_dir, '%s_%d.png' % (prefix, i)))
 
 
-# define training step
+# ---------------- training one step ----------------
 def train_step(layouts_json, is_training=True):
     """[summary]
 
@@ -189,12 +79,16 @@ def train_step(layouts_json, is_training=True):
         layouts_json (tf.Tensor(dtype=string), batch_size * 1): A batch of layouts' file path
     """
 
+    layout_height = 64.
+    layout_width = 64.
+
     # -------------------------------------------------------------
     #
-    # 1. we combine the obj in a batch into a big graph
+    # 1. combine the objects in one batch into a big graph
     #
     # -------------------------------------------------------------
     obj_offset = 0
+
     # list of category index for all the objects
     all_obj = []
 
@@ -256,13 +150,14 @@ def train_step(layouts_json, is_training=True):
             else:
                 s, o = other, obj_index
 
-            # check for inside / surrounding
+            # check for relationship
             sx0, sy0, sx1, sy1 = cur_boxes[s]
             ox0, oy0, ox1, oy1 = cur_boxes[o]
             d0 = obj_centers[s][0] - obj_centers[o][0]
             d1 = obj_centers[s][1] - obj_centers[o][1]
             theta = math.atan2(d1, d0)
-
+            
+            # TODO: should not hard code relationships
             if sx0 < ox0 and sx1 > ox1 and sy0 < oy0 and sy1 > oy1:
                 p = 'surrounding'
             elif sx0 > ox0 and sx1 < ox1 and sy0 > oy0 and sy1 < oy1:
@@ -292,7 +187,7 @@ def train_step(layouts_json, is_training=True):
     all_triples = tf.convert_to_tensor(all_triples)
 
     O = all_obj.shape[0]
-    T = all_obj.shape[0]
+    T = all_triples.shape[0]
 
     # split triples, s, p and o all have size (T, 1)
     s, p, o = tf.split(all_triples, num_or_size_splits=3, axis=1)
@@ -318,39 +213,167 @@ def train_step(layouts_json, is_training=True):
     return loss
 
 
-# define train function
-def train():
+# ---------------- training pipeline ----------------
+def train(args):
+    if not os.path.isdir(args.output_dir):
+            os.mkdir(args.output_dir)
+
+    if not os.path.isdir(args.checkpoint_dir):
+        os.mkdir(args.checkpoint_dir)
+
+    # ---------------- dataset ----------------
+    dataset = tf.data.Dataset.list_files(os.path.join(args.data_dir, '*.json'))
+    dataset = dataset.batch(batch_size=args.batch_size)
+    
     # TODO: add code of restoring
+    if args.checkpoint_path is not None:
+        # model.restore(args.checkpoint_path)
+        pass
+
     epoch = 0
     iter_cnt = 0
     iter_every_epoch = len(dataset)
 
-    while iter_cnt < num_iterations:
+    while iter_cnt < args.num_iterations:
         for file_batch in dataset:
             loss = train_step(file_batch)
 
             iter_cnt += 1
 
-            # if iter_cnt == eval_mode_after:
-            #     print('switching to eval mode')
-            #     # TODO: switch to eval mode
-
-            if iter_cnt % print_every == 0:
+            if iter_cnt % args.print_every == 0:
                 print(np.mean(loss))
                 print('Epoch: {:.2f}, Iteration: {:6d}. Loss: {:.4f}'.format(
                     iter_cnt / iter_every_epoch, iter_cnt, np.mean(loss)))
 
         epoch += 1
 
-        if epoch % checkpoint_every:
+        if epoch % args.checkpoint_every:
             ckpt_manager.save()
-            sample(epoch)
+            sample('train_%s' % epoch, args)
 
 
-def test():
-    ckpt.restore('./ckpt/ckpt-20120302/ckpt-100')
-    sample(100)
+# ---------------- test pipeline ----------------
+def test(args):
+    # ckpt.restore('./ckpt/ckpt-20120302/ckpt-100')
+    ckpt.resotre(args.checkpoint_path)
+    sample('test')
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+
+    # basic configuration
+    parser.add_argument('--data_dir', default='')
+    parser.add_argument('--mode', default='test', choices=['test', 'train'])
+
+    # model configuration
+    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--num_iter', default=1e+6, type=float)
+    parser.add_argument('--embedding_dim', default=128, type=int)
+    parser.add_argument('--gconv_dim', default=128, type=int)
+    parser.add_argument('--gconv_hidden_dim', default=512, type=int)
+    parser.add_argument('--gconv_num_layers', default=5, type=int)
+    parser.add_argument('--mlp_normalization', default='none')
+    parser.add_argument('--normalization', default='batch')
+    parser.add_argument('--activation', default='leakyrelu-0.2')
+
+    # print and ckpt configuration
+    parser.add_argument('--print_every', default=10, type=int)
+    parser.add_argument('--checkpoint_every', default=1e4, type=int)
+    parser.add_argument('--output_dir', default='./test/test-result/')
+    parser.add_argument('--checkpoint_dir', default='./ckpt/')
+    parser.add_argument('--checkpoint_max_to_keep', default=20, type=int)
+    parser.add_argument('--checkpoint_path', default=None)
+    parser.add_argument('--sample_json', default='./test/test.json')
+
+    args = parser.parse_args()
+
+    if args.mode not in ['train', 'test']:
+        raise ValueError('unknown mode' % args.mode)
+
+    # ---------------- vocabulary ----------------
+    vocab = {
+        'object_name_to_idx': {},
+        'pred_name_to_idx': {},
+    }
+    vocab['object_name_to_idx']['__image__'] = 0
+    vocab['object_name_to_idx']['text over image'] = 1
+    vocab['object_name_to_idx']['image'] = 2
+    vocab['object_name_to_idx']['background'] = 3
+    vocab['object_name_to_idx']['header'] = 4
+    vocab['object_name_to_idx']['header over image'] = 5
+    vocab['object_name_to_idx']['text'] = 6
+
+    # build object_idx_to_name
+    name_to_idx = vocab['object_name_to_idx']
+    assert len(name_to_idx) == len(set(name_to_idx.values()))
+    max_object_idx = max(name_to_idx.values())
+    idx_to_name = ['NONE'] * (1 + max_object_idx)
+    for name, idx in vocab['object_name_to_idx'].items():
+        idx_to_name[idx] = name
+    vocab['object_idx_to_name'] = idx_to_name
+
+    vocab['pred_idx_to_name'] = [
+        '__in_image__',
+        'left of',
+        'right of',
+        'above',
+        'below',
+        'inside',
+        'surrounding',
+    ]
+
+    # build pred_name_to_idx
+    vocab['pred_name_to_idx'] = {}
+    for idx, name in enumerate(vocab['pred_idx_to_name']):
+        vocab['pred_name_to_idx'][name] = idx
+
+
+    # ---------------- models ----------------
+    model_kwargs = {
+        'vocab': vocab,
+        'embedding_dim': args.embedding_dim,
+        'gconv_dim': args.gconv_dim,
+        'gconv_hidden_dim': args.gconv_hidden_dim,
+        'gconv_num_layers': args.gconv_num_layers,
+        'mlp_normalization': args.mlp_normalization,
+        'normalization': args.normalization,
+        'activation': args.activation,
+    }
+    model = Sg2ImModel(**model_kwargs)
+
+
+    # ---------------- optimizer ----------------
+    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
+
+
+    # ---------------- loss function ----------------
+    def box_loss(bbox_pred, bbox):
+        loss_box = tf.keras.losses.MSE(bbox_pred, bbox)
+        return loss_box
+
+
+    # ---------------- checkpoint manager ----------------
+    ckpt = tf.train.Checkpoint(
+        optimizer=optimizer,
+        model=model
+    )
+
+    ckpt_manager = tf.train.CheckpointManager(
+        ckpt, args.checkpoint_dir, max_to_keep=args.checkpoint_max_to_keep)
+
+    pipeline_kwargs = {
+        'model': model,
+        'optimizer': optimizer,
+        'ckpt': ckpt,
+        'ckpt_manager': ckpt_manager
+    }
+
+    # -------------- start ---------------
+    if args.mode == 'test':
+        print('Start testing...')
+        test(args)
+    elif args.mode == 'train':
+        print('Start training...')
+        train(args)
