@@ -11,7 +11,9 @@ We notice that *layout* is a useful by-product of [sg2im](https://github.com/goo
 
 In this repo we implement this idea using TensorFlow 2.3.  
 
-Here we list some generated layout using this model.  
+Here we list some generated layouts using this model.  
+
+<img src='./result/colormap.png' width="50%" />  
 
 | Scene Graph | Layout |  
 | --- | --- |  
