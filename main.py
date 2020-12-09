@@ -285,7 +285,7 @@ if __name__ == '__main__':
     parser.add_argument('--print_every', default=10, type=int)
     parser.add_argument('--checkpoint_every', default=1e4, type=int)
     parser.add_argument('--output_dir', default=None)
-    parser.add_argument('--checkpoint_dir', default=None)
+    parser.add_argument('--checkpoint_dir', default='./ckpt')
     parser.add_argument('--checkpoint_max_to_keep', default=20, type=int)
     parser.add_argument('--checkpoint_path', default=None)
     parser.add_argument('--sample_json', default='./test/test.json')
