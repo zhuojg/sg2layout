@@ -80,7 +80,7 @@ Test
 python main.py --mode test --checkpoint_path ./ckpt/ckpt-100 --output_dir %WHERE_YOU_WANT_TO_SAVE_TEST
 ```
 
-## Feature Work  
+## Future Work  
 
 - Add more kinds of constrains, like size, between layout elements.  
 - Add more features, like image feature extracted from ResNet.  
